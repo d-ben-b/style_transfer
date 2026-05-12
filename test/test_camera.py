@@ -147,4 +147,4 @@ def run_live_style_transfer(
 
 
 if __name__ == "__main__":
-    run_live_style_transfer("mosaic_fp16.engine")
+    run_live_style_transfer("mosaic_int8.engine")
