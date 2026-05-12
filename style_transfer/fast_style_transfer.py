@@ -105,53 +105,54 @@ class TransformerNet(nn.Module):
 # 2. 下載權重與讀取圖片
 # ==========================================
 # 自動下載預訓練好的馬賽克風格權重
-weight_file = "mosaic.pth"
-if not os.path.exists(weight_file):
-    print("正在下載預訓練的馬賽克風格權重...")
-    # 修正後有效的連結
-    url = "https://raw.githubusercontent.com/vihar/picasso-style-transfer/master/saved_models/mosaic.pth"
-    urllib.request.urlretrieve(url, weight_file)
+if __name__ == "__main__":
+    weight_file = "mosaic.pth"
+    if not os.path.exists(weight_file):
+        print("正在下載預訓練的馬賽克風格權重...")
+        # 修正後有效的連結
+        url = "https://raw.githubusercontent.com/vihar/picasso-style-transfer/master/saved_models/mosaic.pth"
+        urllib.request.urlretrieve(url, weight_file)
 
-print("正在載入模型與權重...")
-style_model = TransformerNet()
-state_dict = torch.load(weight_file)
-# 修正一下歷史版本模型儲存的 key 名稱差異
-for k in list(state_dict.keys()):
-    if re.search(r"in\d+\.running_(mean|var)$", k):
-        del state_dict[k]
-style_model.load_state_dict(state_dict, strict=False)
-style_model.to(device)
-style_model.eval()  # 設定為推論模式
+    print("正在載入模型與權重...")
+    style_model = TransformerNet()
+    state_dict = torch.load(weight_file)
+    # 修正一下歷史版本模型儲存的 key 名稱差異
+    for k in list(state_dict.keys()):
+        if re.search(r"in\d+\.running_(mean|var)$", k):
+            del state_dict[k]
+    style_model.load_state_dict(state_dict, strict=False)
+    style_model.to(device)
+    style_model.eval()  # 設定為推論模式
 
-print("正在讀取本地端測試圖片 content.png ...")
-content_image = Image.open("content.png").convert("RGB")
-content_transform = transforms.Compose(
-    [
-        transforms.Resize(480),  # 將圖片短邊縮放至 480 像素 (若還是 OOM 可以改成 256)
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.mul(255)),
-    ]
-)
-content_tensor = content_transform(content_image).unsqueeze(0).to(device)
+    print("正在讀取本地端測試圖片 content.png ...")
+    content_image = Image.open("content.png").convert("RGB")
+    content_transform = transforms.Compose(
+        [
+            transforms.Resize(480),  # 將圖片短邊縮放至 480 像素 (若還是 OOM 可以改成 256)
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.mul(255)),
+        ]
+    )
+    content_tensor = content_transform(content_image).unsqueeze(0).to(device)
 
-# ==========================================
-# 3. 執行推論 (Forward Pass)
-# ==========================================
-print("開始進行 Fast Neural Style Transfer 推論...")
-start_time = time.time()
+    # ==========================================
+    # 3. 執行推論 (Forward Pass)
+    # ==========================================
+    print("開始進行 Fast Neural Style Transfer 推論...")
+    start_time = time.time()
 
-with torch.no_grad():  # 推論時不需要計算梯度
-    output_tensor = style_model(content_tensor)
+    with torch.no_grad():  # 推論時不需要計算梯度
+        output_tensor = style_model(content_tensor)
 
-end_time = time.time()
-print(f"轉換完成！總耗時: {end_time - start_time:.4f} 秒")
+    end_time = time.time()
+    print(f"轉換完成！總耗時: {end_time - start_time:.4f} 秒")
 
-# ==========================================
-# 4. 儲存結果
-# ==========================================
-output_tensor = output_tensor.clone().squeeze(0).cpu().clamp(0, 255)
-output_tensor = output_tensor.div(255)
-imsave_transform = transforms.ToPILImage()
-output_image = imsave_transform(output_tensor)
-output_image.save("output_fast_baseline.png")
-print("結果已存檔為 output_fast_baseline.png")
+    # ==========================================
+    # 4. 儲存結果
+    # ==========================================
+    output_tensor = output_tensor.clone().squeeze(0).cpu().clamp(0, 255)
+    output_tensor = output_tensor.div(255)
+    imsave_transform = transforms.ToPILImage()
+    output_image = imsave_transform(output_tensor)
+    output_image.save("output_fast_baseline.png")
+    print("結果已存檔為 output_fast_baseline.png")
