@@ -109,7 +109,6 @@ if __name__ == "__main__":
     weight_file = "mosaic.pth"
     if not os.path.exists(weight_file):
         print("正在下載預訓練的馬賽克風格權重...")
-        # 修正後有效的連結
         url = "https://raw.githubusercontent.com/vihar/picasso-style-transfer/master/saved_models/mosaic.pth"
         urllib.request.urlretrieve(url, weight_file)
 
@@ -128,7 +127,9 @@ if __name__ == "__main__":
     content_image = Image.open("content.png").convert("RGB")
     content_transform = transforms.Compose(
         [
-            transforms.Resize(480),  # 將圖片短邊縮放至 480 像素 (若還是 OOM 可以改成 256)
+            transforms.Resize(
+                480
+            ),  # 將圖片短邊縮放至 480 像素 (若還是 OOM 可以改成 256)
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.mul(255)),
         ]

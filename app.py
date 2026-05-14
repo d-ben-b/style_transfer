@@ -12,33 +12,51 @@ import time
 cudart_path = ctypes.util.find_library("cudart") or "/usr/local/cuda/lib64/libcudart.so"
 cudart = ctypes.CDLL(cudart_path)
 
+
 def cuda_malloc(size):
     ptr = ctypes.c_void_p()
     if cudart.cudaMalloc(ctypes.byref(ptr), ctypes.c_size_t(size)) != 0:
         raise RuntimeError("cudaMalloc failed!")
     return ptr.value
 
+
 def cuda_free(ptr):
     cudart.cudaFree(ctypes.c_void_p(ptr))
+
 
 def cuda_stream_create():
     stream = ctypes.c_void_p()
     cudart.cudaStreamCreate(ctypes.byref(stream))
     return stream.value
 
+
 def cuda_stream_synchronize(stream):
     cudart.cudaStreamSynchronize(ctypes.c_void_p(stream))
+
 
 def cuda_stream_destroy(stream):
     cudart.cudaStreamDestroy(ctypes.c_void_p(stream))
 
+
 def cuda_memcpy_htod_async(dst_ptr, src_array, size, stream):
-    cudart.cudaMemcpyAsync(ctypes.c_void_p(dst_ptr), src_array.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_size_t(size), ctypes.c_int(1), ctypes.c_void_p(stream))
+    cudart.cudaMemcpyAsync(
+        ctypes.c_void_p(dst_ptr),
+        src_array.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_size_t(size),
+        ctypes.c_int(1),
+        ctypes.c_void_p(stream),
+    )
+
 
 def cuda_memcpy_dtoh_async(dst_array, src_ptr, size, stream):
-    cudart.cudaMemcpyAsync(dst_array.ctypes.data_as(ctypes.c_void_p), ctypes.c_void_p(src_ptr),
-                           ctypes.c_size_t(size), ctypes.c_int(2), ctypes.c_void_p(stream))
+    cudart.cudaMemcpyAsync(
+        dst_array.ctypes.data_as(ctypes.c_void_p),
+        ctypes.c_void_p(src_ptr),
+        ctypes.c_size_t(size),
+        ctypes.c_int(2),
+        ctypes.c_void_p(stream),
+    )
+
 
 # ==========================================
 # 2. TensorRT 引擎封裝類別
@@ -48,7 +66,7 @@ class TRTEngineWrapper:
         self.logger = trt.Logger(trt.Logger.WARNING)
         with open(engine_path, "rb") as f, trt.Runtime(self.logger) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())
-        
+
         self.context = self.engine.create_execution_context()
         self.stream = cuda_stream_create()
         
@@ -58,30 +76,33 @@ class TRTEngineWrapper:
         
         self.d_input = cuda_malloc(self.buffer_size)
         self.d_output = cuda_malloc(self.buffer_size)
-        
+
         in_name = self.engine.get_tensor_name(0)
         out_name = self.engine.get_tensor_name(1)
         self.context.set_tensor_address(in_name, self.d_input)
         self.context.set_tensor_address(out_name, self.d_output)
-        
+
         self.h_output = np.empty(self.shape, dtype=np.float32)
 
     def infer(self, img_chw):
         h_input = np.ascontiguousarray(img_chw)
-        
+
         start_time = time.time()
         cuda_memcpy_htod_async(self.d_input, h_input, self.buffer_size, self.stream)
         self.context.execute_async_v3(stream_handle=self.stream)
-        cuda_memcpy_dtoh_async(self.h_output, self.d_output, self.buffer_size, self.stream)
+        cuda_memcpy_dtoh_async(
+            self.h_output, self.d_output, self.buffer_size, self.stream
+        )
         cuda_stream_synchronize(self.stream)
         infer_time = time.time() - start_time
-        
+
         return self.h_output[0], infer_time
 
     def __del__(self):
         cuda_free(self.d_input)
         cuda_free(self.d_output)
         cuda_stream_destroy(self.stream)
+
 
 # ==========================================
 # 3. 系統初始化與推論邏輯
@@ -120,7 +141,7 @@ def process_image(input_img, backend_choice):
         elif backend_choice == "TensorRT (INT8)":
             if not trt_int8_engine: return None, "找不到 INT8 引擎"
             out_img_chw, infer_time = trt_int8_engine.infer(img_batch)
-            
+
         else:
             return None, "未知的後端選擇"
 
@@ -129,28 +150,29 @@ def process_image(input_img, backend_choice):
         
         fps = 1.0 / infer_time
         stats = f"**推論耗時**: {infer_time*1000:.2f} ms\n**換算 FPS**: {fps:.2f} 幀/秒"
-        
+
         return out_img_clamped, stats
 
     except Exception as e:
         return None, f"發生錯誤: {str(e)}"
+
 
 # ==========================================
 # 4. Gradio UI 介面設計
 # ==========================================
 with gr.Blocks(title="Edge Computing NST Demo", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# 🚀 邊緣運算裝置影像風格轉換效能展示")
-    
+
     with gr.Row():
         with gr.Column():
             input_image = gr.Image(label="上傳測試影像", type="numpy")
             backend_radio = gr.Radio(
                 choices=["TensorRT (FP16)", "TensorRT (INT8)"],
                 value="TensorRT (FP16)",
-                label="Inference Backend"
+                label="Inference Backend",
             )
             submit_btn = gr.Button("執行風格轉換", variant="primary")
-            
+
         with gr.Column():
             output_image = gr.Image(label="轉換結果 (480x640)")
             output_stats = gr.Markdown(label="效能指標")
@@ -158,7 +180,7 @@ with gr.Blocks(title="Edge Computing NST Demo", theme=gr.themes.Soft()) as demo:
     submit_btn.click(
         fn=process_image,
         inputs=[input_image, backend_radio],
-        outputs=[output_image, output_stats]
+        outputs=[output_image, output_stats],
     )
 
 if __name__ == "__main__":
